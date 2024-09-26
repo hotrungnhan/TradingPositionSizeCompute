@@ -2,6 +2,7 @@ import { bind, Subscribe } from "@react-rxjs/core";
 import { createSignal } from "@react-rxjs/utils";
 import { useCallback } from "react";
 import { combineLatest, debounceTime, Observable } from "rxjs";
+import { merge } from "rxjs";
 import { map } from "rxjs/operators";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -90,7 +91,6 @@ const states = fields.reduce<{
   acc[field.name] = {
     field: field,
     useValue: useValue,
-    // valueChange$: valueChange$,
     setValue: setValue,
     value$: value$.pipe(debounceTime(200)),
   };
@@ -113,6 +113,15 @@ const states = fields.reduce<{
 
   return acc;
 }, {});
+
+// merge(
+merge(
+  ...Object.entries(states).map(([key, methods]) => {
+    return methods.value$.pipe(map((v) => [key, v]));
+  })
+).subscribe((v) => {
+  console.log(v);
+});
 
 const [useRiskInUSD, riskInUSD$] = bind(
   combineLatest(
