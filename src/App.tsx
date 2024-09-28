@@ -172,7 +172,7 @@ const [usePositionSizeCrypto, positionSizeCrypto$] = bind(
   undefined
 );
 
-const [usePositionSizeUSD, _positionSizeUSD$] = bind(
+const [usePositionSizeUSD, positionSizeUSD$] = bind(
   combineLatest(states["entry-price"].value$, positionSizeCrypto$).pipe(
     map((values: any) => {
       const [entryPrice, positionSizeCrypto] = values as number[];
@@ -182,8 +182,47 @@ const [usePositionSizeUSD, _positionSizeUSD$] = bind(
   ),
   undefined
 );
+const [useFeeInUSD, _feeInUSD$] = bind(
+  combineLatest(
+    states["entry-price"].value$,
+    states["stoploss"].value$,
+    states["stop-fee"].value$,
+    states["entry-fee"].value$,
+    positionSizeUSD$
+  ).pipe(
+    map((values: any) => {
+      const [entryPrice, stoploss, stopFee, entryFee, positionSizeUSD] =
+        values as number[];
 
-function rounding(num: number) {
+      return (
+        positionSizeUSD *
+        (entryFee / 100 + (stopFee / 100) * (entryPrice / stoploss))
+      );
+    })
+  ),
+  undefined
+);
+
+const [useEntryOverStoplossRatio, _entryOverStoplossRatio$] = bind(
+  combineLatest(
+    states["entry-price"].value$,
+    states["stoploss"].value$,
+    positionSizeUSD$
+  ).pipe(
+    map((values: any) => {
+      const [entryPrice, stoploss] = values as number[];
+
+      return entryPrice > stoploss
+        ? 1 - stoploss / entryPrice
+        : 1 - entryPrice / stoploss;
+    })
+  ),
+  undefined
+);
+function rounding(num: number | string) {
+  if (typeof num == "string") {
+    return num;
+  }
   const l = Math.floor(Math.log10(num));
 
   if (l > 0) {
@@ -212,7 +251,8 @@ function ComputePositionSize() {
   const trend = useTrend();
   const positionSizeUSD = usePositionSizeUSD();
   const positionSizeCrypto = usePositionSizeCrypto();
-
+  const feeInUSD = useFeeInUSD();
+  const entryOverStoplossRatio = useEntryOverStoplossRatio();
   const reset = useCallback(
     () =>
       Object.entries(states).forEach(([key, methods]) => {
@@ -295,21 +335,31 @@ function ComputePositionSize() {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
           <thead>
             <tr>
-              {["Risk In USD", "Position Size USD", "Position Size Crypto"].map(
-                (header) => (
-                  <th
-                    scope="col"
-                    className="px-6 py-3 text-start text-xs font-medium text-[#a1a5ab] uppercase "
-                  >
-                    {header}
-                  </th>
-                )
-              )}
+              {[
+                "Risk In USD",
+                "Position Size USD",
+                "Position Size Crypto",
+                "Fee In USD",
+                "Relative Entry/Stoploss %",
+              ].map((header) => (
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-start text-xs font-medium text-[#a1a5ab] uppercase "
+                >
+                  {header}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             <tr>
-              {[riskInUSD, positionSizeUSD, positionSizeCrypto].map((value) => (
+              {[
+                riskInUSD,
+                positionSizeUSD,
+                positionSizeCrypto,
+                feeInUSD,
+                (entryOverStoplossRatio || 0) * 100,
+              ].map((value) => (
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#1d82f6]">
                   {value ? rounding(value) : "NaN"}
                 </td>
