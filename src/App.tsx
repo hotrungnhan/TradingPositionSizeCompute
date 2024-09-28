@@ -149,37 +149,49 @@ const [useTrend, _trend$] = bind(
   undefined
 );
 
-const riskPerTrade$ = combineLatest(
-  states["entry-price"].value$,
-  states["stoploss"].value$
-).pipe(
-  map((values: any) => {
-    const [entryPrice, stoploss] = values as number[];
-
-    return Math.abs(entryPrice - stoploss);
-  })
-);
-
-const [usePositionSizeUSD, positionSizeUSD$] = bind(
-  combineLatest(states["entry-price"].value$, riskInUSD$, riskPerTrade$).pipe(
+const [usePositionSizeCrypto, positionSizeCrypto$] = bind(
+  combineLatest(
+    states["entry-price"].value$,
+    riskInUSD$,
+    states["stoploss"].value$,
+    states["stop-fee"].value$,
+    states["entry-fee"].value$
+  ).pipe(
     map((values: any) => {
-      const [entryPrice, riskInUSD, riskPerTrade] = values as number[];
+      const [entryPrice, riskInUSD, stoploss, stopFee, entryFee] =
+        values as number[];
 
-      return (entryPrice * riskInUSD) / riskPerTrade;
+      return (
+        riskInUSD /
+        (entryFee / 100 +
+          (stopFee / 100) * (entryPrice / stoploss) +
+          Math.abs(entryPrice - stoploss))
+      );
     })
   ),
   undefined
 );
-const [usePositionSizeCrypto, _positionSizeCrypto$] = bind(
-  combineLatest(positionSizeUSD$, states["entry-price"].value$).pipe(
-    map((values: any) => {
-      const [positionSizeUSD, entryPrice] = values as number[];
 
-      return positionSizeUSD / entryPrice;
+const [usePositionSizeUSD, _positionSizeUSD$] = bind(
+  combineLatest(states["entry-price"].value$, positionSizeCrypto$).pipe(
+    map((values: any) => {
+      const [entryPrice, positionSizeCrypto] = values as number[];
+
+      return entryPrice * positionSizeCrypto;
     })
   ),
   undefined
 );
+
+function rounding(num: number) {
+  const l = Math.floor(Math.log10(num));
+
+  if (l > 0) {
+    return num.toString().slice(0, l + 4);
+  }
+  return num.toFixed(-l + 3);
+}
+
 function ComputePositionSize() {
   const _states = Object.entries(states).reduce((acc, [fieldName, methods]) => {
     acc[fieldName] = methods.useValue();
@@ -231,7 +243,7 @@ function ComputePositionSize() {
               >
                 <label
                   htmlFor={f.name}
-                  className="text-[#a1a5ab] basis-40 py-4 pl-4 text-sm my-auto font-semibold"
+                  className="text-[#a1a5ab] basis-44 py-3 pl-4 text-sm my-auto font-semibold"
                 >
                   {f.title}
                 </label>
@@ -242,7 +254,7 @@ function ComputePositionSize() {
                     disabled={_lockStates[f.name]}
                     value={_states[f.name] as any}
                     onChange={(e) => states[f.name].setValue(e.target.value)}
-                    className="w-full outline-none py-4 px-2 bg-inherit disabled:text-[#1d82f6]"
+                    className="w-full outline-none py-3 px-2 bg-inherit disabled:text-[#1d82f6] overflow-auto"
                     min={f.min}
                     max={f.max}
                     step={f.step}
@@ -272,14 +284,39 @@ function ComputePositionSize() {
             );
           })}
         </div>
-        <div>
-          <button onClick={() => reset()}>Reset all</button>
+        <div className="flex justify-center gap-4">
+          <button
+            className="hover:text-[#1d82f6] opacity-25 hover:opacity-100 transition delay-75 "
+            onClick={() => reset()}
+          >
+            Reset all
+          </button>
         </div>
-        <div>
-          <p>Risk USD: {riskInUSD}</p>
-          <p>Position Size USD: {positionSizeUSD}</p>
-          <p>Position Size Crypto: {positionSizeCrypto}</p>
-        </div>
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
+          <thead>
+            <tr>
+              {["Risk In USD", "Position Size USD", "Position Size Crypto"].map(
+                (header) => (
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-start text-xs font-medium text-[#a1a5ab] uppercase "
+                  >
+                    {header}
+                  </th>
+                )
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {[riskInUSD, positionSizeUSD, positionSizeCrypto].map((value) => (
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#1d82f6]">
+                  {value ? rounding(value) : "NaN"}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </Subscribe>
   );
@@ -288,19 +325,24 @@ function ComputePositionSize() {
 function App() {
   return (
     <>
-      <main className="container px-4 mx-auto text-white gap-16 flex flex-col">
-        <div className="items-center flex flex-col mx-auto gap-8 pt-16">
-          <h1 className="text-4xl lg:text-6xl font-bold">
+      <main className="container px-4 mx-auto text-white gap-16 flex flex-col mt-8 mb-8">
+        <section className="items-center flex flex-col mx-auto gap-4 mt-8">
+          <h1 className="text-4xl lg:text-5xl font-bold">
             Crypto Position Size Calculator!
           </h1>
           <p className="text-md mx-auto">
             Calculate your crypto position size according to account balance,
             risk, entry price, stop loss and exchange trading fees.
           </p>
-        </div>
-        <div className="flex flex-row">
+        </section>
+        <section className="flex flex-row">
           <ComputePositionSize />
-        </div>
+        </section>
+        <footer className="bottom-0 w-full flex justify-center py-3 border-t-[1px] border-white bg-[#1f2122]">
+          <p className="animate-pulse">
+            Ho Trung Nhan ©{new Date().getFullYear()}
+          </p>
+        </footer>
       </main>
       <ToastContainer
         autoClose={200}
