@@ -284,8 +284,13 @@ function ComputePositionSize() {
             );
           })}
         </div>
-        <div>
-          <button onClick={() => reset()}>Reset all</button>
+        <div className="flex justify-center gap-4">
+          <button
+            className="hover:text-[#1d82f6] opacity-25 hover:opacity-100 transition delay-75 "
+            onClick={() => reset()}
+          >
+            Reset all
+          </button>
         </div>
         <table className="min-w-full divide-y divide-gray-200 dark:divide-neutral-700">
           <thead>
@@ -321,7 +326,7 @@ function App() {
   return (
     <>
       <main className="container px-4 mx-auto text-white gap-16 flex flex-col mt-8 mb-8">
-        <div className="items-center flex flex-col mx-auto gap-4 mt-8">
+        <section className="items-center flex flex-col mx-auto gap-4 mt-8">
           <h1 className="text-4xl lg:text-5xl font-bold">
             Crypto Position Size Calculator!
           </h1>
@@ -329,10 +334,15 @@ function App() {
             Calculate your crypto position size according to account balance,
             risk, entry price, stop loss and exchange trading fees.
           </p>
-        </div>
-        <div className="flex flex-row">
+        </section>
+        <section className="flex flex-row">
           <ComputePositionSize />
-        </div>
+        </section>
+        <footer className="bottom-0 w-full flex justify-center py-3 border-t-[1px] border-white bg-[#1f2122]">
+          <p className="animate-pulse">
+            Ho Trung Nhan ©{new Date().getFullYear()}
+          </p>
+        </footer>
       </main>
       <ToastContainer
         autoClose={200}
