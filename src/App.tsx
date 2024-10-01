@@ -42,7 +42,7 @@ const fields = [
   {
     name: "entry-fee",
     title: "Entry Fee (%):",
-    defaultValue: "1",
+    defaultValue: 0.01,
     type: "number",
     min: 0,
     max: 100,
@@ -56,7 +56,21 @@ const fields = [
   {
     name: "stop-fee",
     title: "Stop Fee %:",
-    defaultValue: 1,
+    defaultValue: 0.01,
+    type: "number",
+    min: 0,
+    max: 100,
+    lockable: true,
+  },
+  {
+    name: "take-profit",
+    title: "Take Profit:",
+    type: "number",
+  },
+  {
+    name: "take-profit-fee",
+    title: "Take Profit Fee %:",
+    defaultValue: 0.01,
     type: "number",
     min: 0,
     max: 100,
@@ -149,7 +163,7 @@ const [useTrend, _trend$] = bind(
   undefined
 );
 
-const [usePositionSizeCrypto, positionSizeCrypto$] = bind(
+const [usePositionSizeUSD, positionSizeUSD$] = bind(
   combineLatest(
     states["entry-price"].value$,
     riskInUSD$,
@@ -161,23 +175,25 @@ const [usePositionSizeCrypto, positionSizeCrypto$] = bind(
       const [entryPrice, riskInUSD, stoploss, stopFee, entryFee] =
         values as number[];
 
+      const lossRemainedPercent =
+        entryPrice < stoploss ? entryPrice / stoploss : stoploss / entryPrice;
       return (
         riskInUSD /
         (entryFee / 100 +
-          (stopFee / 100) * (entryPrice / stoploss) +
-          Math.abs(entryPrice - stoploss))
+          (stopFee / 100) * lossRemainedPercent +
+          (1 - lossRemainedPercent))
       );
     })
   ),
   undefined
 );
 
-const [usePositionSizeUSD, positionSizeUSD$] = bind(
-  combineLatest(states["entry-price"].value$, positionSizeCrypto$).pipe(
+const [usePositionSizeCrypto, _positionSizeCrypto$] = bind(
+  combineLatest(states["entry-price"].value$, positionSizeUSD$).pipe(
     map((values: any) => {
-      const [entryPrice, positionSizeCrypto] = values as number[];
+      const [entryPrice, positionSizeUSD] = values as number[];
 
-      return entryPrice * positionSizeCrypto;
+      return positionSizeUSD / entryPrice;
     })
   ),
   undefined
@@ -203,7 +219,7 @@ const [useFeeInUSD, _feeInUSD$] = bind(
   undefined
 );
 
-const [useEntryOverStoplossRatio, _entryOverStoplossRatio$] = bind(
+const [useEntryOverStoplossRatio, entryOverStoplossRatio$] = bind(
   combineLatest(
     states["entry-price"].value$,
     states["stoploss"].value$,
@@ -219,6 +235,82 @@ const [useEntryOverStoplossRatio, _entryOverStoplossRatio$] = bind(
   ),
   undefined
 );
+
+const [useTradeProfit, tradeProfit$] = bind(
+  combineLatest(
+    states["entry-price"].value$,
+    states["entry-fee"].value$,
+    states["take-profit"].value$,
+    states["take-profit-fee"].value$,
+    positionSizeUSD$
+  ).pipe(
+    map((values: any) => {
+      const [entryPrice, entryFee, takeProfit, takeProfitFee, positionSize] =
+        values as number[];
+
+      const TPRatio =
+        entryPrice > takeProfit
+          ? entryPrice / takeProfit
+          : takeProfit / entryPrice;
+
+      return (
+        positionSize * TPRatio -
+        (positionSize * entryFee) / 100 -
+        (positionSize * TPRatio * takeProfitFee) / 100
+      );
+    })
+  ),
+  undefined
+);
+
+const [useTradeProfitRatio, _tradeProfitRatio$] = bind(
+  combineLatest(positionSizeUSD$, tradeProfit$).pipe(
+    map((values: any) => {
+      const [positionSize, tradeProfit] = values as number[];
+
+      return tradeProfit / positionSize;
+    })
+  ),
+  undefined
+);
+
+const [useRealProfitPercent, _realProfitPercent$] = bind(
+  combineLatest(states["account-balance"].value$, tradeProfit$).pipe(
+    map((values: any) => {
+      const [balance, tradeProfit] = values as number[];
+
+      return tradeProfit / balance;
+    })
+  ),
+  undefined
+);
+
+const [useEntryOverTakeProfitRatio, entryOverTakeProfitRatio$] = bind(
+  combineLatest(
+    states["entry-price"].value$,
+    states["take-profit"].value$
+  ).pipe(
+    map((values: any) => {
+      const [entry, takeProfit] = values as number[];
+
+      return takeProfit < entry ? takeProfit / entry : entry / takeProfit;
+    })
+  ),
+  undefined
+);
+
+const [useRiskRewardRatio, _riskRewardRatio$] = bind(
+  combineLatest(entryOverTakeProfitRatio$, entryOverStoplossRatio$).pipe(
+    map((values: any) => {
+      const [entryOverTakeProfitRatio, entryOverStoplossRatio] =
+        values as number[];
+      console.log(entryOverTakeProfitRatio, entryOverStoplossRatio);
+      return entryOverTakeProfitRatio / entryOverStoplossRatio;
+    })
+  ),
+  undefined
+);
+
 function rounding(num: number | string) {
   if (typeof num == "string") {
     return num;
@@ -253,6 +345,12 @@ function ComputePositionSize() {
   const positionSizeCrypto = usePositionSizeCrypto();
   const feeInUSD = useFeeInUSD();
   const entryOverStoplossRatio = useEntryOverStoplossRatio();
+  const tradeProfit = useTradeProfit();
+  const tradeProfitRatio = useTradeProfitRatio();
+  const realProfit = useRealProfitPercent();
+
+  const entryOverTakeProfitRatio = useEntryOverTakeProfitRatio();
+  const riskRewardRatio = useRiskRewardRatio();
   const reset = useCallback(
     () =>
       Object.entries(states).forEach(([key, methods]) => {
@@ -340,7 +438,7 @@ function ComputePositionSize() {
                 "Position Size USD",
                 "Position Size Crypto",
                 "Fee In USD",
-                "Relative Entry/Stoploss %",
+                "Relative Stoploss/Entry %",
               ].map((header) => (
                 <th
                   scope="col"
@@ -359,6 +457,39 @@ function ComputePositionSize() {
                 positionSizeCrypto,
                 feeInUSD,
                 (entryOverStoplossRatio || 0) * 100,
+              ].map((value) => (
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#1d82f6]">
+                  {value ? rounding(value) : "NaN"}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+          <thead>
+            <tr>
+              {[
+                "Trade Profit in USD",
+                "Trade Profit %",
+                "Real Profit %",
+                "Relative TakeProfit/Entry %",
+                "Risk-Reward ratio",
+              ].map((header) => (
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-start text-xs font-medium text-[#a1a5ab] uppercase "
+                >
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {[
+                tradeProfit,
+                (tradeProfitRatio || 0) * 100,
+                (realProfit || 0) * 100,
+                (entryOverTakeProfitRatio || 0) * 100,
+                riskRewardRatio,
               ].map((value) => (
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[#1d82f6]">
                   {value ? rounding(value) : "NaN"}
