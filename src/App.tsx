@@ -6,6 +6,7 @@ import { merge } from "rxjs";
 import { map } from "rxjs/operators";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import classNames from "classnames";
 
 const fields = [
   {
@@ -151,13 +152,24 @@ const [useRiskInUSD, riskInUSD$] = bind(
 );
 
 const [useTrend, _trend$] = bind(
-  combineLatest(states["entry-price"].value$, states["stoploss"].value$).pipe(
+  combineLatest(
+    states["entry-price"].value$,
+    states["stoploss"].value$,
+    states["take-profit"].value$
+  ).pipe(
     map((values: any) => {
-      const [entryPrice, stoploss] = values as string[];
+      const [entryPrice, stoploss, takeProfit] = values as string[];
       if (!entryPrice || !stoploss) {
         return undefined;
       }
-      return entryPrice > stoploss ? "Bullish" : "Bearish";
+
+      if (
+        (entryPrice > stoploss && entryPrice > takeProfit) ||
+        (entryPrice < stoploss && entryPrice < takeProfit)
+      ) {
+        return "Unknown";
+      }
+      return entryPrice > stoploss ? "Long" : "Short";
     })
   ),
   undefined
@@ -304,7 +316,6 @@ const [useRiskRewardRatio, _riskRewardRatio$] = bind(
     map((values: any) => {
       const [entryOverTakeProfitRatio, entryOverStoplossRatio] =
         values as number[];
-      console.log(entryOverTakeProfitRatio, entryOverStoplossRatio);
       return entryOverTakeProfitRatio / entryOverStoplossRatio;
     })
   ),
@@ -368,8 +379,13 @@ function ComputePositionSize() {
   return (
     <Subscribe>
       <div className="flex flex-col w-full gap-4 md:w-4/5 lg:w-3/5  mx-auto">
-        <h5 className="mx-auto text-md text-[#1d82f6] font-bold ">
-          {trend && `You are ${trend}!`} &thinsp;
+        <h5
+          className={classNames("mx-auto text-md text-[#1d82f6] font-bold", {
+            "text-green-500": trend == "Long",
+            "text-red-700": trend == "Short",
+          })}
+        >
+          {trend && `You are open ${trend} position !`} &thinsp;
         </h5>
 
         <div className="flex gap-4 flex-col">
