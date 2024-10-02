@@ -266,9 +266,10 @@ const [useTradeProfit, tradeProfit$] = bind(
           : takeProfit / entryPrice;
 
       return (
-        positionSize * TPRatio -
-        (positionSize * entryFee) / 100 -
-        (positionSize * TPRatio * takeProfitFee) / 100
+        positionSize *
+        Math.abs(
+          1 - (TPRatio - entryFee / 100 + TPRatio * (takeProfitFee / 100))
+        )
       );
     })
   ),
@@ -305,7 +306,7 @@ const [useEntryOverTakeProfitRatio, entryOverTakeProfitRatio$] = bind(
     map((values: any) => {
       const [entry, takeProfit] = values as number[];
 
-      return takeProfit < entry ? takeProfit / entry : entry / takeProfit;
+      return 1 - (takeProfit < entry ? takeProfit / entry : entry / takeProfit);
     })
   ),
   undefined
